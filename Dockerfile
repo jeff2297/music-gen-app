@@ -1,1 +1,28 @@
-# Build stage\nFROM node:18-alpine AS builder\n\nWORKDIR /app\n\n# Copy package files\nCOPY package*.json ./\n\n# Install dependencies\nRUN npm ci --prefer-offline --no-audit\n\n# Copy source code\nCOPY . .\n\n# Build frontend\nRUN npm run build\n\n# Production stage\nFROM node:18-alpine\n\nWORKDIR /app\n\n# Install only production dependencies\nCOPY package*.json ./\nRUN npm ci --only=production --prefer-offline --no-audit\n\n# Copy built frontend from builder\nCOPY --from=builder /app/dist ./dist\n\n# Copy server file\nCOPY server.js .\n\n# Create .env file\nRUN echo \"NODE_ENV=production\" > .env\n\n# Expose port\nEXPOSE 3000\n\n# Health check\nHEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \\\n  CMD node -e \"require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})\" || exit 1\n\n# Start application\nCMD [\"node\", \"server.js\"]\n
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --prefer-offline --no-audit
+
+COPY . .
+
+RUN npm run build
+
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production --prefer-offline --no-audit
+
+COPY --from=builder /app/dist ./dist
+
+COPY server.js .
+
+ENV NODE_ENV=production
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
